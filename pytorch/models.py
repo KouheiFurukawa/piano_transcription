@@ -160,8 +160,8 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
 
         sample_rate = 16000
         window_size = 2048
-        hop_size = sample_rate // frames_per_second
-        mel_bins = 229
+        hop_size = 256
+        mel_bins = 80
         fmin = 30
         fmax = sample_rate // 2
 
@@ -172,7 +172,7 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
         amin = 1e-10
         top_db = None
 
-        midfeat = 1792
+        midfeat = 640
         momentum = 0.01
 
         # Spectrogram extractor
@@ -264,8 +264,8 @@ class Regress_pedal_CRNN(nn.Module):
 
         sample_rate = 16000
         window_size = 2048
-        hop_size = sample_rate // frames_per_second
-        mel_bins = 229
+        hop_size = 256
+        mel_bins = 80
         fmin = 30
         fmax = sample_rate // 2
 
@@ -276,7 +276,7 @@ class Regress_pedal_CRNN(nn.Module):
         amin = 1e-10
         top_db = None
 
-        midfeat = 1792
+        midfeat = 640
         momentum = 0.01
 
         # Spectrogram extractor
