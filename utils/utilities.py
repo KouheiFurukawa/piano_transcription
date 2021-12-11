@@ -370,7 +370,7 @@ class TargetProcessor(object):
             note_events = self.extend_pedal(note_events, pedal_events)
         
         # Prepare targets
-        frames_num = int(round(self.segment_seconds * self.frames_per_second)) + 1
+        frames_num = int(round(self.segment_seconds * self.frames_per_second))
         onset_roll = np.zeros((frames_num, self.classes_num))
         offset_roll = np.zeros((frames_num, self.classes_num))
         reg_onset_roll = np.ones((frames_num, self.classes_num))
@@ -398,7 +398,7 @@ class TargetProcessor(object):
                 bgn_frame = int(round((note_event['onset_time'] - start_time) * self.frames_per_second))
                 fin_frame = int(round((note_event['offset_time'] - start_time) * self.frames_per_second))
 
-                if fin_frame >= 0:
+                if frames_num > fin_frame >= 0:
                     frame_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = 1
 
                     offset_roll[fin_frame, piano_note] = 1
@@ -437,7 +437,7 @@ class TargetProcessor(object):
             bgn_frame = int(round((pedal_event['onset_time'] - start_time) * self.frames_per_second))
             fin_frame = int(round((pedal_event['offset_time'] - start_time) * self.frames_per_second))
 
-            if fin_frame >= 0:
+            if frames_num > fin_frame >= 0:
                 pedal_frame_roll[max(bgn_frame, 0) : fin_frame + 1] = 1
 
                 pedal_offset_roll[fin_frame] = 1
