@@ -151,13 +151,14 @@ class AcousticModelCRnn8Dropout(nn.Module):
     def __init__(self, classes_num, midfeat, momentum):
         super(AcousticModelCRnn8Dropout, self).__init__()
 
-        self.conv_block1 = ConvBlock1D(in_channels=1, out_channels=48, momentum=momentum)
-        self.conv_block2 = ConvBlock1D(in_channels=48, out_channels=64, momentum=momentum)
-        self.conv_block3 = ConvBlock1D(in_channels=64, out_channels=96, momentum=momentum)
-        self.conv_block4 = ConvBlock1D(in_channels=96, out_channels=128, momentum=momentum)
+        self.conv_block1 = ConvBlock(in_channels=1, out_channels=48, momentum=momentum)
+        self.conv_block2 = ConvBlock(in_channels=48, out_channels=64, momentum=momentum)
+        self.conv_block3 = ConvBlock(in_channels=64, out_channels=96, momentum=momentum)
+        self.conv_block4 = ConvBlock(in_channels=96, out_channels=128, momentum=momentum)
 
-        self.fc5 = nn.Linear(midfeat, 768, bias=False)
-        self.bn5 = nn.BatchNorm1d(768, momentum=momentum)
+        self.fc5 = nn.Linear(midfeat, 384, bias=False)
+        self.fc_mel = nn.Linear(1024, 384, bias=False)
+        self.bn5 = nn.BatchNorm1d(384, momentum=momentum)
 
         self.gru = nn.GRU(input_size=768, hidden_size=256, num_layers=2,
             bias=True, batch_first=True, dropout=0., bidirectional=True)
@@ -172,7 +173,7 @@ class AcousticModelCRnn8Dropout(nn.Module):
         init_gru(self.gru)
         init_layer(self.fc)
 
-    def forward(self, input):
+    def forward(self, input, mel):
         """
         Args:
           input: (batch_size, channels_num, time_steps, freq_bins)
@@ -180,20 +181,23 @@ class AcousticModelCRnn8Dropout(nn.Module):
         Outputs:
           output: (batch_size, time_steps, classes_num)
         """
-        # b = input.size(0)
-        # x = self.conv_block1(input.transpose(1, 2).contiguous().view(-1, 1, 128), pool_size=2, pool_type='avg')
-        # x = F.dropout(x, p=0.2, training=self.training)
-        # x = self.conv_block2(x, pool_size=2, pool_type='avg')
-        # x = F.dropout(x, p=0.2, training=self.training)
-        # x = self.conv_block3(x, pool_size=2, pool_type='avg')
-        # x = F.dropout(x, p=0.2, training=self.training)
-        # x = self.conv_block4(x, pool_size=2, pool_type='avg')
-        # x = F.dropout(x, p=0.2, training=self.training)
-        # x = x.view(b, -1, 128, 8).flatten(2)
+        mel = self.conv_block1(input, pool_size=(1, 2), pool_type='avg')
+        mel = F.dropout(mel, p=0.2, training=self.training)
+        mel = self.conv_block2(mel, pool_size=(1, 2), pool_type='avg')
+        mel = F.dropout(mel, p=0.2, training=self.training)
+        mel = self.conv_block3(mel, pool_size=(1, 2), pool_type='avg')
+        mel = F.dropout(mel, p=0.2, training=self.training)
+        mel = self.conv_block4(mel, pool_size=(1, 2), pool_type='avg')
+        mel = F.dropout(mel, p=0.2, training=self.training)
 
-        x = input.transpose(1, 2).flatten(2)
+        mel = mel.transpose(1, 2).flatten(2)
+        mel = F.relu(self.bn5(self.fc_mel(mel).transpose(1, 2)).transpose(1, 2))
+        mel = F.dropout(mel, p=0.5, training=self.training, inplace=True)
+
+        x = input.transpose(1, 2).squeeze()
         x = F.relu(self.bn5(self.fc5(x).transpose(1, 2)).transpose(1, 2))
         x = F.dropout(x, p=0.5, training=self.training, inplace=True)
+        x = torch.cat([mel, x], dim=-1)
 
         (x, _) = self.gru(x)
         x = F.dropout(x, p=0.5, training=self.training, inplace=False)
@@ -219,7 +223,7 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
         amin = 1e-10
         top_db = None
 
-        midfeat = 1024
+        midfeat = 128
         momentum = 0.01
         self.mulaw = MuLawEncoding(256)
 
@@ -273,18 +277,18 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
           }
         """
 
-        # x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
-        # x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
+        mel = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
+        mel = self.logmel_extractor(mel)    # (batch_size, 1, time_steps, mel_bins)
         x = self.enc_dynamic(self.mulaw(input.unsqueeze(1)).float()).unsqueeze(-1).transpose(1, -1)
 
-        x = x.transpose(1, 3)
-        x = self.bn0(x)
-        x = x.transpose(1, 3)
+        x, mel = x.transpose(1, 3), mel.transpose(1, 3)
+        x, mel = self.bn0(x), self.bn0(mel)
+        x, mel = x.transpose(1, 3), mel.transpose(1, 3)
 
-        frame_output = self.frame_model(x)  # (batch_size, time_steps, classes_num)
-        reg_onset_output = self.reg_onset_model(x)  # (batch_size, time_steps, classes_num)
-        reg_offset_output = self.reg_offset_model(x)    # (batch_size, time_steps, classes_num)
-        velocity_output = self.velocity_model(x)    # (batch_size, time_steps, classes_num)
+        frame_output = self.frame_model(x, mel)  # (batch_size, time_steps, classes_num)
+        reg_onset_output = self.reg_onset_model(x, mel)  # (batch_size, time_steps, classes_num)
+        reg_offset_output = self.reg_offset_model(x, mel)    # (batch_size, time_steps, classes_num)
+        velocity_output = self.velocity_model(x, mel)    # (batch_size, time_steps, classes_num)
 
         # Use velocities to condition onset regression
         x = torch.cat((reg_onset_output, (reg_onset_output ** 0.5) * velocity_output.detach()), dim=2)
@@ -327,7 +331,7 @@ class Regress_pedal_CRNN(nn.Module):
         amin = 1e-10
         top_db = None
 
-        midfeat = 1024
+        midfeat = 128
         momentum = 0.01
 
         # Spectrogram extractor

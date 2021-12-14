@@ -77,21 +77,21 @@ def train(args):
         model_type, 'loss_type={}'.format(loss_type), 
         'augmentation={}'.format(augmentation), 
         'max_note_shift={}'.format(max_note_shift),
-        'batch_size={}_transfer'.format(batch_size))
+        'batch_size={}_mel_emb'.format(batch_size))
     create_folder(checkpoints_dir)
 
     statistics_path = os.path.join(workspace, 'statistics', filename, 
         model_type, 'loss_type={}'.format(loss_type), 
         'augmentation={}'.format(augmentation), 
         'max_note_shift={}'.format(max_note_shift), 
-        'batch_size={}_transfer'.format(batch_size), 'statistics.pkl')
+        'batch_size={}_mel_emb'.format(batch_size), 'statistics.pkl')
     create_folder(os.path.dirname(statistics_path))
 
     logs_dir = os.path.join(workspace, 'logs', filename, 
         model_type, 'loss_type={}'.format(loss_type), 
         'augmentation={}'.format(augmentation), 
         'max_note_shift={}'.format(max_note_shift), 
-        'batch_size={}_transfer'.format(batch_size))
+        'batch_size={}_mel_emb'.format(batch_size))
     create_folder(logs_dir)
 
     create_logging(logs_dir, filemode='w')
@@ -175,7 +175,7 @@ def train(args):
     if resume_iteration > 0:
         resume_checkpoint_path = os.path.join(workspace, 'checkpoints', filename, 
             model_type, 'loss_type={}'.format(loss_type), 
-            'augmentation={}'.format(augmentation), 'batch_size={}_transfer'.format(batch_size),
+            'augmentation={}'.format(augmentation), 'batch_size={}_mel_emb'.format(batch_size),
                 '{}_iterations.pth'.format(resume_iteration))
 
         logging.info('Loading checkpoint {}'.format(resume_checkpoint_path))
