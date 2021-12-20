@@ -109,8 +109,9 @@ class AcousticModelCRnn8Dropout(nn.Module):
         self.conv_block3 = ConvBlock(in_channels=64, out_channels=96, momentum=momentum)
         self.conv_block4 = ConvBlock(in_channels=96, out_channels=128, momentum=momentum)
 
-        self.fc5 = nn.Linear(midfeat, 768, bias=False)
-        self.bn5 = nn.BatchNorm1d(768, momentum=momentum)
+        self.fc5 = nn.Linear(midfeat, 384, bias=False)
+        self.bn5 = nn.BatchNorm1d(384, momentum=momentum)
+        self.prenet_emb = nn.Conv1d(128, 384, 1)
 
         self.gru = nn.GRU(input_size=768, hidden_size=256, num_layers=2,
                           bias=True, batch_first=True, dropout=0., bidirectional=True)
@@ -125,7 +126,7 @@ class AcousticModelCRnn8Dropout(nn.Module):
         init_gru(self.gru)
         init_layer(self.fc)
 
-    def forward(self, input):
+    def forward(self, input, dyn_emb):
         """
         Args:
           input: (batch_size, channels_num, time_steps, freq_bins)
@@ -146,6 +147,8 @@ class AcousticModelCRnn8Dropout(nn.Module):
         x = x.transpose(1, 2).flatten(2)
         x = F.relu(self.bn5(self.fc5(x).transpose(1, 2)).transpose(1, 2))
         x = F.dropout(x, p=0.5, training=self.training, inplace=True)
+        d = self.prenet_emb(dyn_emb.squeeze().permute(0, 2, 1)).permute(0, 2, 1)
+        x = torch.cat([x, d], dim=-1)
 
         (x, _) = self.gru(x)
         x = F.dropout(x, p=0.5, training=self.training, inplace=False)
@@ -187,6 +190,7 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
                                                  amin=amin, top_db=top_db, freeze_parameters=True)
 
         self.bn0 = nn.BatchNorm2d(mel_bins, momentum)
+        self.bn_dyn = nn.BatchNorm2d(mel_bins, momentum)
 
         self.frame_model = AcousticModelCRnn8Dropout(classes_num, midfeat, momentum)
         self.reg_onset_model = AcousticModelCRnn8Dropout(classes_num, midfeat, momentum)
@@ -225,16 +229,24 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
         """
 
         x = self.spectrogram_extractor(input)  # (batch_size, 1, time_steps, freq_bins)
-        x = self.logmel_extractor(x)  # (batch_size, 1, time_steps, mel_bins)
+        x = self.logmel_extractor(x)[:, :, :-1, :]  # (batch_size, 1, time_steps, mel_bins)
+        with torch.no_grad():
+            dyn_emb = self.enc_dynamic(self.mulaw(input.unsqueeze(1)).float()).unsqueeze(-1).transpose(1, -1)
 
         x = x.transpose(1, 3)
         x = self.bn0(x)
         x = x.transpose(1, 3)
+        x = x / torch.max(x)
 
-        frame_output = self.frame_model(x)  # (batch_size, time_steps, classes_num)
-        reg_onset_output = self.reg_onset_model(x)  # (batch_size, time_steps, classes_num)
-        reg_offset_output = self.reg_offset_model(x)  # (batch_size, time_steps, classes_num)
-        velocity_output = self.velocity_model(x)  # (batch_size, time_steps, classes_num)
+        dyn_emb = dyn_emb.transpose(1, 3)
+        dyn_emb = self.bn_dyn(dyn_emb)
+        dyn_emb = dyn_emb.transpose(1, 3)
+        dyn_emb = dyn_emb / torch.max(dyn_emb)
+
+        frame_output = self.frame_model(x, dyn_emb)  # (batch_size, time_steps, classes_num)
+        reg_onset_output = self.reg_onset_model(x, dyn_emb)  # (batch_size, time_steps, classes_num)
+        reg_offset_output = self.reg_offset_model(x, dyn_emb)  # (batch_size, time_steps, classes_num)
+        velocity_output = self.velocity_model(x, dyn_emb)  # (batch_size, time_steps, classes_num)
 
         # Use velocities to condition onset regression
         x = torch.cat((reg_onset_output, (reg_onset_output ** 0.5) * velocity_output.detach()), dim=2)
