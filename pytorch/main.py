@@ -176,6 +176,7 @@ def train(args):
         resume_checkpoint_path = os.path.join(workspace, 'checkpoints', filename,
                                               model_type, 'loss_type={}'.format(loss_type),
                                               'augmentation={}'.format(augmentation),
+                                              'max_note_shift=0',
                                               'batch_size={}_mel_emb'.format(batch_size),
                                               '{}_iterations.pth'.format(resume_iteration))
 

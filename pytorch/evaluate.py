@@ -55,6 +55,8 @@ class SegmentEvaluator(object):
             statistics['frame_ap'] = metrics.average_precision_score(
                 output_dict['frame_roll'].flatten(), 
                 output_dict['frame_output'].flatten(), average='macro')
+            statistics['roc'] = metrics.roc_auc_score(output_dict['frame_roll'].flatten(),
+                                                  output_dict['frame_output'].flatten(), average='macro')
         
         if 'onset_output' in output_dict.keys():
             statistics['onset_macro_ap'] = metrics.average_precision_score(
