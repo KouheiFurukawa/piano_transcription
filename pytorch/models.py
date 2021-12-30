@@ -12,6 +12,7 @@ from torchaudio.transforms import MuLawEncoding
 
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
 from pytorch_utils import move_data_to_device
+from fairseq.models.wav2vec.wav2vec2 import ConvFeatureExtractionModel, Wav2Vec2Config
 
 
 def init_layer(layer):
@@ -162,8 +163,8 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
 
         sample_rate = 16000
         window_size = 2048
-        hop_size = 256
-        mel_bins = 128
+        hop_size = 320
+        mel_bins = 80
         fmin = 30
         fmax = sample_rate // 2
 
@@ -174,10 +175,15 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
         amin = 1e-10
         top_db = None
 
-        midfeat = 1024
+        midfeat = 640
         momentum = 0.01
         self.mulaw = MuLawEncoding(256)
-        self.enc_dynamic = DynamicEncoder(embed_dim=128)
+        self.prenet = ConvFeatureExtractionModel(
+            conv_layers=eval(Wav2Vec2Config.conv_feature_layers),
+            dropout=0.0,
+            mode=Wav2Vec2Config.extractor_mode,
+            conv_bias=Wav2Vec2Config.conv_bias,
+        )
 
         # Spectrogram extractor
         self.spectrogram_extractor = Spectrogram(n_fft=window_size,
@@ -229,9 +235,8 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
         """
 
         x = self.spectrogram_extractor(input)  # (batch_size, 1, time_steps, freq_bins)
-        x = self.logmel_extractor(x)[:, :, :-1, :]  # (batch_size, 1, time_steps, mel_bins)
-        with torch.no_grad():
-            dyn_emb = self.enc_dynamic(self.mulaw(input.unsqueeze(1)).float()).unsqueeze(-1).transpose(1, -1)
+        x = self.logmel_extractor(x)[:, :, :-2, :]  # (batch_size, 1, time_steps, mel_bins)
+        dyn_emb = self.prenet(input.squeeze(1)).unsqueeze(-1).transpose(1, -1)
 
         x = x.transpose(1, 3)
         x = self.bn0(x)

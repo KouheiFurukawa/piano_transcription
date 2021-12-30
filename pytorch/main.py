@@ -192,10 +192,8 @@ def train(args):
 
     # Parallel
     print('GPU number: {}'.format(torch.cuda.device_count()))
-    encoder_state = torch.load('/data/unagi0/furukawa/openmic_sd/checkpoint_0500.pth.tar')['state_dict']
+    encoder_state = torch.load('/data/unagi0/furukawa/wn_checkpoints/ae/wavenet_135000')['model']
     model.load_state_dict(encoder_state, strict=False)
-    for p in model.enc_dynamic.parameters():
-        p.requires_grad = False
     model = torch.nn.DataParallel(model)
 
     if 'cuda' in str(device):

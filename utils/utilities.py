@@ -370,7 +370,7 @@ class TargetProcessor(object):
             note_events = self.extend_pedal(note_events, pedal_events)
         
         # Prepare targets
-        frames_num = int(round(self.segment_seconds * self.frames_per_second))
+        frames_num = int(round(self.segment_seconds * self.frames_per_second)) - 1
         onset_roll = np.zeros((frames_num, self.classes_num))
         offset_roll = np.zeros((frames_num, self.classes_num))
         reg_onset_roll = np.ones((frames_num, self.classes_num))
